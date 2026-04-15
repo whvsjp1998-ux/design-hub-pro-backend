@@ -57,7 +57,7 @@ def analyze_image(image_data, mode='text', custom_prompt=''):
     if mode == 'custom' and custom_prompt:
         prompt = f"{custom_prompt}. Requirements: Within 15 words/characters, no punctuation, direct result only, no explanatory text like 'this is' or '这是'."
     elif mode == 'text':
-        prompt = "Extract ONLY the main title text from this image. Rules: 1) Find the text with the LARGEST font size, 2) Output EXACTLY what you see, character by character, 3) Keep the ORIGINAL LANGUAGE unchanged, 4) Do NOT interpret, translate, or describe the content, 5) Ignore logos, small text, and subtitles. Maximum 15 characters, no punctuation."
+        prompt = "Extract the main title text and key slogans from this image. Rules: 1) Focus on the most prominent text, 2) Output EXACTLY what you see, 3) Keep the ORIGINAL LANGUAGE, 4) No explanatory text. Maximum 30 characters."
     else:
         prompt = "Describe this illustration in English within 20 words. Focus on key visual elements, style, and composition. No punctuation."
 
