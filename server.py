@@ -1,21 +1,16 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import base64
-import io
 import json
 import os
-from PIL import Image
 import requests
 import re
 
 app = Flask(__name__, static_folder='.')
 CORS(app, resources={r"/*": {"origins": "*", "allow_headers": ["Content-Type", "X-API-Provider", "X-API-Key"], "methods": ["GET", "POST", "OPTIONS"]}})
 
-# 配置文件路径
 CONFIG_FILE = 'api_config.json'
 
 def load_config():
-    """从配置文件或环境变量加载 API 配置"""
     config = {}
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
@@ -26,7 +21,7 @@ def load_config():
         config['apiKey'] = os.getenv('AI_API_KEY')
     return config
 
-def analyze_image(image_data, mode='text', custom_prompt='', provider=None, api_key=None):
+def analyze_image(image_base64, mode='text', custom_prompt='', provider=None, api_key=None):
     if not provider or not api_key:
         config = load_config()
         provider = provider or config.get('provider', '')
@@ -43,15 +38,6 @@ def analyze_image(image_data, mode='text', custom_prompt='', provider=None, api_
         model = 'glm-4v-flash'
     else:
         return {'success': False, 'error': f'Unsupported provider: {provider}'}
-
-    img = Image.open(io.BytesIO(image_data))
-    img.thumbnail((1024, 1024))
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-
-    buffered = io.BytesIO()
-    img.save(buffered, format='JPEG', quality=85)
-    img_b64 = base64.b64encode(buffered.getvalue()).decode()
 
     if mode == 'custom' and custom_prompt:
         prompt = f"{custom_prompt}. Requirements: Within 15 words/characters, no punctuation, direct result only, no explanatory text like 'this is' or '这是'."
@@ -71,7 +57,7 @@ def analyze_image(image_data, mode='text', custom_prompt='', provider=None, api_
                 'role': 'user',
                 'content': [
                     {'type': 'text', 'text': prompt},
-                    {'type': 'image_url', 'image_url': {'url': f'data:image/jpeg;base64,{img_b64}'}}
+                    {'type': 'image_url', 'image_url': {'url': image_base64}}
                 ]
             }
         ],
@@ -95,19 +81,20 @@ def analyze_image(image_data, mode='text', custom_prompt='', provider=None, api_
 def analyze():
     if request.method == 'OPTIONS':
         return jsonify({'success': True}), 200
-    
+
     try:
-        if 'image' not in request.files:
+        data = request.json
+        if not data or 'image_base64' not in data:
             return jsonify({'success': False, 'error': 'No image provided'}), 400
-        image_file = request.files['image']
-        mode = request.form.get('mode', 'text')
-        custom_prompt = request.form.get('customPrompt', '')
-        image_data = image_file.read()
+
+        image_base64 = data['image_base64']
+        mode = data.get('mode', 'text')
+        custom_prompt = data.get('customPrompt', '')
 
         provider = request.headers.get('X-API-Provider', '')
         api_key = request.headers.get('X-API-Key', '')
 
-        result = analyze_image(image_data, mode, custom_prompt, provider=provider, api_key=api_key)
+        result = analyze_image(image_base64, mode, custom_prompt, provider=provider, api_key=api_key)
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -139,7 +126,6 @@ def serve_static(path):
     return send_from_directory('.', path)
 
 if __name__ == '__main__':
-    # 修正 3：动态获取端口，确保云端兼容性
     port = int(os.environ.get("PORT", 5000))
     print(f'Design Hub Pro Server Starting on port {port}...')
     app.run(host='0.0.0.0', port=port, debug=True)
