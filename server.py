@@ -9,8 +9,7 @@ import requests
 import re
 
 app = Flask(__name__, static_folder='.')
-# 修正 1：更彻底的跨域配置，确保 Vercel 能够访问
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*", "allow_headers": ["Content-Type", "X-API-Provider", "X-API-Key"], "methods": ["GET", "POST", "OPTIONS"]}})
 
 # 配置文件路径
 CONFIG_FILE = 'api_config.json'
@@ -27,14 +26,14 @@ def load_config():
         config['apiKey'] = os.getenv('AI_API_KEY')
     return config
 
-def analyze_image(image_data, mode='text', custom_prompt=''):
-    """调用 AI API 分析图片"""
-    config = load_config()
-    if not config.get('provider') or not config.get('apiKey'):
-        return {'success': False, 'error': 'API not configured'}
+def analyze_image(image_data, mode='text', custom_prompt='', provider=None, api_key=None):
+    if not provider or not api_key:
+        config = load_config()
+        provider = provider or config.get('provider', '')
+        api_key = api_key or config.get('apiKey', '')
 
-    provider = config['provider']
-    api_key = config['apiKey']
+    if not provider or not api_key:
+        return {'success': False, 'error': 'API not configured. Please configure in API Settings.'}
 
     if 'openai' in provider.lower():
         url = 'https://api.openai.com/v1/chat/completions'
@@ -91,11 +90,9 @@ def analyze_image(image_data, mode='text', custom_prompt=''):
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-# 修正 2：同时监听 /analyze 和 /api/analyze，并允许 POST 和 OPTIONS
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 @app.route('/api/analyze', methods=['POST', 'OPTIONS'])
 def analyze():
-    # 处理浏览器的预检请求
     if request.method == 'OPTIONS':
         return jsonify({'success': True}), 200
     
@@ -106,7 +103,11 @@ def analyze():
         mode = request.form.get('mode', 'text')
         custom_prompt = request.form.get('customPrompt', '')
         image_data = image_file.read()
-        result = analyze_image(image_data, mode, custom_prompt)
+
+        provider = request.headers.get('X-API-Provider', '')
+        api_key = request.headers.get('X-API-Key', '')
+
+        result = analyze_image(image_data, mode, custom_prompt, provider=provider, api_key=api_key)
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
